@@ -6,7 +6,7 @@ from pydub import AudioSegment
 import speech_recognition as sr
 import pytesseract
 from PIL import Image
-ALLOWED_IDS = [1928616895,]
+#ALLOWED_IDS = [1928616895,]
 
 API_KEY = os.environ['TELE_API']
 if not API_KEY:
@@ -57,8 +57,8 @@ def greet(message):
 
 @bot.message_handler(content_types=['photo'])
 def photo(message):
-    if message.from_user.id not in ALLOWED_IDS:
-        return
+#    if message.from_user.id not in ALLOWED_IDS:
+#        return
     bot.reply_to(message, 'Got photo. recognition started...')
     try:
         file_location = message.photo[-1].file_id
@@ -77,8 +77,8 @@ def photo(message):
 
 @bot.message_handler(content_types=['audio','voice'])
 def recording(message):
-    if message.from_user.id not in ALLOWED_IDS:
-        return
+#    if message.from_user.id not in ALLOWED_IDS:
+#        return
     print(message)
     bot.reply_to(message, 'Got audio to transcribe. Working... ')
 
