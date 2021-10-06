@@ -1,5 +1,6 @@
 pytesseract~=0.3.6
 pydub~=0.25.1
-Pillow~=7.0.0
+Pillow~=8.3.2
+#7.0.0
 pyTelegramBotAPI
 SpeechRecognition
