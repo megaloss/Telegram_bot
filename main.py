@@ -6,21 +6,31 @@ from pydub import AudioSegment
 import speech_recognition as sr
 import pytesseract
 from PIL import Image
-#ALLOWED_IDS = [1928616895,]
+
+# ALLOWED_IDS = [1928616895,1968077769]
+SUPPORTED_LANGS_TESS = {'en': 'eng',
+                        'ru': 'rus',
+                        'nl': 'nld'}
+SUPPORTED_LANGS_SPEECH = {'en': 'en-GB',
+                          'uk': 'en-GB',
+                          'us': 'en-US',
+                          'ru': 'ru',
+                          'nl': 'nl-NL'}
+
+lang = 'en'
 
 API_KEY = os.environ['TELE_API']
 if not API_KEY:
-    print ('No API KEY provided !')
+    print('No API KEY provided !')
     exit(2)
 bot = telebot.TeleBot(API_KEY)
 print(API_KEY)
 
 
-def recognize(file):
-    text = pytesseract.image_to_string(Image.open(file))
+def recognize(file, lang):
+    text = pytesseract.image_to_string(Image.open(file), lang=SUPPORTED_LANGS_TESS[lang])
     os.remove(file)
     return text
-
 
 
 def transcribe(file, chunksize=60000):
@@ -36,30 +46,44 @@ def transcribe(file, chunksize=60000):
 
     r = sr.Recognizer()
     # 2: per chunk, save to wav, then read and run through recognize_google()
-    string =''
+    string = ''
     for index, chunk in enumerate(chunks):
         # TODO io.BytesIO()
         chunk.export('delete_me.wav', format='wav')
         with sr.AudioFile('delete_me.wav') as source:
             audio = r.record(source)
-        #s = r.recognize_sphinx(audio, language="en-US")
-        s = r.recognize_google(audio, language="en-US")
+        # s = r.recognize_sphinx(audio, language=SUPPORTED_LANGS_SPEECH[lang])
+        s = r.recognize_google(audio, language=SUPPORTED_LANGS_SPEECH[lang])
         string += s
     os.remove(file)
     return string
 
-
-@bot.message_handler()#commands=['Greet','greet','hi','Hi','hello','Hello'])
+@bot.message_handler(commands=['en', 'ru', 'nl', 'us', 'gb', 'En', 'Ru', 'Nl', 'Us','Gb','lng'])
 def greet(message):
+    global lang
+    text = message.text[1:].lower()
+    if text in SUPPORTED_LANGS_SPEECH:
+        bot.reply_to(message, f"Switching language to {text}. ")
+        lang = text
+    else:
+        bot.reply_to(message, f"Working language is {lang}. ")
 
+
+@bot.message_handler()  # commands=['Greet','greet','hi','Hi','hello','Hello'])
+def greet(message):
     bot.reply_to(message, f"hi, {message.from_user.first_name} ! Your id is: {message.from_user.id}")
+
+
 
 
 @bot.message_handler(content_types=['photo'])
 def photo(message):
-#    if message.from_user.id not in ALLOWED_IDS:
-#        return
+    #    if message.from_user.id not in ALLOWED_IDS:
+    #        return
     bot.reply_to(message, 'Got photo. recognition started...')
+    lang = 'en'
+    if message.caption and message.caption.lower() in SUPPORTED_LANGS_TESS:
+        lang = message.caption.lower()
     try:
         file_location = message.photo[-1].file_id
         file_info = bot.get_file_url(file_location)
@@ -67,32 +91,31 @@ def photo(message):
         bot.reply_to(message, e)
         return
     file_name = file_info.split('/')[-1]
-    urllib.request.urlretrieve(file_info,file_name)
-    text = recognize(file_name)
+    urllib.request.urlretrieve(file_info, file_name)
+    text = recognize(file_name, lang)
     if text:
         bot.reply_to(message, text)
     else:
         bot.reply_to(message, 'Sorry, no text found')
 
 
-@bot.message_handler(content_types=['audio','voice'])
+@bot.message_handler(content_types=['audio', 'voice'])
 def recording(message):
-#    if message.from_user.id not in ALLOWED_IDS:
-#        return
-    print(message)
+    #    if message.from_user.id not in ALLOWED_IDS:
+    #        return
     bot.reply_to(message, 'Got audio to transcribe. Working... ')
 
     try:
         file_location = message.audio.file_id if message.content_type == 'audio' else message.voice.file_id
         file_info = bot.get_file_url(file_location)
-        print (file_info)
+        print(file_info)
     except Exception as e:
-        print (e)
+        print(e)
         bot.reply_to(message, e)
         return
 
     file_name = file_info.split('/')[-1]
-    urllib.request.urlretrieve(file_info,file_name)
+    urllib.request.urlretrieve(file_info, file_name)
 
     text = transcribe(file_name)
     if text:
