@@ -101,4 +101,4 @@ def recording(message):
         bot.reply_to(message, 'Sorry, no text recognized')
 
 
-bot.polling()
+bot.polling(none_stop=True)
