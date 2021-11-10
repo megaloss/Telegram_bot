@@ -6,8 +6,9 @@ from pydub import AudioSegment
 import speech_recognition as sr
 import pytesseract
 from PIL import Image
+from datetime import datetime
 
-# ALLOWED_IDS = [1928616895,1968077769]
+ALLOWED_IDS = [1928616895,1968077769]
 SUPPORTED_LANGS_TESS = {'en': 'eng',
                         'ru': 'rus',
                         'nl': 'nld'}
@@ -17,15 +18,16 @@ SUPPORTED_LANGS_SPEECH = {'en': 'en-GB',
                           'ru': 'ru',
                           'nl': 'nl-NL'}
 
-lang = 'en'
+lang = {'1928616895':'en',
+        '1968077769':'en'}
 
 API_KEY = os.environ['TELE_API']
 if not API_KEY:
     print('No API KEY provided !')
     exit(2)
 bot = telebot.TeleBot(API_KEY)
-print(API_KEY)
-
+#print(API_KEY)
+print (datetime.now(), ' Bot is running... ')
 
 def recognize(file, lang):
     text = pytesseract.image_to_string(Image.open(file), lang=SUPPORTED_LANGS_TESS[lang])
@@ -33,7 +35,7 @@ def recognize(file, lang):
     return text
 
 
-def transcribe(file, chunksize=60000):
+def transcribe(file, lang='en', chunksize=60000):
     # 0: load
     sound = AudioSegment.from_ogg(file)
 
@@ -64,9 +66,9 @@ def greet(message):
     text = message.text[1:].lower()
     if text in SUPPORTED_LANGS_SPEECH:
         bot.reply_to(message, f"Switching language to {text}. ")
-        lang = text
+        lang[str(message.from_user.id)] = text
     else:
-        bot.reply_to(message, f"Working language is {lang}. ")
+        bot.reply_to(message, f"Working language is {lang[str(message.from_user.id)]}. ")
 
 
 @bot.message_handler()  # commands=['Greet','greet','hi','Hi','hello','Hello'])
@@ -81,9 +83,9 @@ def photo(message):
     #    if message.from_user.id not in ALLOWED_IDS:
     #        return
     bot.reply_to(message, 'Got photo. recognition started...')
-    lang = 'en'
+    #lang = 'en'
     if message.caption and message.caption.lower() in SUPPORTED_LANGS_TESS:
-        lang = message.caption.lower()
+        lang[str(message.from_user.id)] = message.caption.lower()
     try:
         file_location = message.photo[-1].file_id
         file_info = bot.get_file_url(file_location)
@@ -92,7 +94,8 @@ def photo(message):
         return
     file_name = file_info.split('/')[-1]
     urllib.request.urlretrieve(file_info, file_name)
-    text = recognize(file_name, lang)
+    text = recognize(file_name, lang[str(message.from_user.id)])
+    print (datetime.now(), ' recognizing ', file_name)
     if text:
         bot.reply_to(message, text)
     else:
@@ -115,13 +118,17 @@ def recording(message):
         return
 
     file_name = file_info.split('/')[-1]
+    print(datetime.now(), ' transcribing ', file_name)
     urllib.request.urlretrieve(file_info, file_name)
 
-    text = transcribe(file_name)
+    text = transcribe(file_name,lang=lang[str(message.from_user.id)])
     if text:
         bot.reply_to(message, text)
     else:
         bot.reply_to(message, 'Sorry, no text recognized')
 
 
-bot.polling(none_stop=True)
+bot.infinity_polling(timeout=20, long_polling_timeout = 5)
+#bot.infinity_polling(timeout=10, long_polling_timeout = 5)
+
+
