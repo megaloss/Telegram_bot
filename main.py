@@ -1,13 +1,16 @@
 #! /usr/bin/env python
 import os
+import glob
 import urllib.request
 import telebot
-from pydub import AudioSegment
 import speech_recognition as sr
 import pytesseract
 from PIL import Image
 from datetime import datetime
+import re
 
+MAX_STRING_SIZE = 4096
+video_template = re.compile("^(https?\:\/\/)?(www\.youtube\.com|youtu\.be)\/.+$")
 ALLOWED_IDS = [1928616895,1968077769]
 SUPPORTED_LANGS_TESS = {'en': 'eng',
                         'ru': 'rus',
@@ -35,29 +38,37 @@ def recognize(file, lang):
     return text
 
 
-def transcribe(file, lang='en', chunksize=60000):
-    # 0: load
-    sound = AudioSegment.from_ogg(file)
-
-    # 1: split file into 60s chunks
-    def divide_chunks(sound, chunksize):
-        for i in range(0, len(sound), chunksize):
-            yield sound[i:i + chunksize]
-
-    chunks = list(divide_chunks(sound, chunksize))
+def transcribe(in_file, lang='en', chunksize=60000):
+    print ("transcribing file:", in_file)
+    try:
+        ff = glob.glob("out*.*")
+        if ff: # delete old file if found
+            for f in ff:
+                os.remove(f)
+        command = "ffmpeg -y -i " + in_file + " delete_me.wav" # convert into wav
+        os.system(command)
+        command="ffmpeg -y -i delete_me.wav -f segment -segment_time 60 -c copy out%03d.wav" # split into 1 min chunks
+        os.system(command)
+        os.remove("delete_me.wav")
+        files = sorted(glob.glob("out*.wav"))
+    except Exception as e:
+        print (e)
+        return
 
     r = sr.Recognizer()
-    # 2: per chunk, save to wav, then read and run through recognize_google()
     string = ''
-    for index, chunk in enumerate(chunks):
-        # TODO io.BytesIO()
-        chunk.export('delete_me.wav', format='wav')
-        with sr.AudioFile('delete_me.wav') as source:
+
+    for file in files:
+        print (file)
+        with sr.AudioFile(file) as source:
             audio = r.record(source)
-        # s = r.recognize_sphinx(audio, language=SUPPORTED_LANGS_SPEECH[lang])
-        s = r.recognize_google(audio, language=SUPPORTED_LANGS_SPEECH[lang])
+        s = r.recognize_google(audio, language=SUPPORTED_LANGS_SPEECH[lang]) # show_all=True
         string += s
-    os.remove(file)
+        os.remove(file)
+
+    os.remove(in_file)
+
+
     return string
 
 @bot.message_handler(commands=['en', 'ru', 'nl', 'us', 'gb', 'En', 'Ru', 'Nl', 'Us','Gb','lng'])
@@ -69,12 +80,6 @@ def greet(message):
         lang[str(message.from_user.id)] = text
     else:
         bot.reply_to(message, f"Working language is {lang[str(message.from_user.id)]}. ")
-
-
-@bot.message_handler()  # commands=['Greet','greet','hi','Hi','hello','Hello'])
-def greet(message):
-    bot.reply_to(message, f"hi, {message.from_user.first_name} ! Your id is: {message.from_user.id}")
-
 
 
 
@@ -100,6 +105,45 @@ def photo(message):
         bot.reply_to(message, text)
     else:
         bot.reply_to(message, 'Sorry, no text found')
+
+@bot.message_handler()  # commands=['Greet','greet','hi','Hi','hello','Hello'])
+def greet(message):
+    if re.match(video_template,message.text):
+        print ("got youtube link")
+        retrieve_subs(message)
+        return
+
+    bot.reply_to(message, f"hi, {message.from_user.first_name} ! Your id is: {message.from_user.id} ")
+    print (message)
+
+def retrieve_subs(message):
+    bot.reply_to(message, 'Got video to transcribe. Working... ')
+    try:
+        if (os.path.exists("delete_me.opus")):
+            os.remove("delete_me.opus")
+        command = '''yt-dlp -f "bestaudio" --extract-audio ''' + message.text + ''' -o "delete_me.opus" '''
+        s=os.system(command)
+        print (s)
+        if (os.path.exists("delete_me.opus")):
+            file_name="delete_me.opus"
+            text = transcribe(file_name, lang=lang[str(message.from_user.id)])
+            if text:
+                print (text)
+                if len(text) > MAX_STRING_SIZE:
+                    chunks = [text[i:i + MAX_STRING_SIZE] for i in range(0, len(text), MAX_STRING_SIZE)]
+                    for chunk in chunks:
+                        bot.reply_to(message,chunk)
+                    return
+
+                bot.reply_to(message, text)
+            else:
+                bot.reply_to(message, 'Sorry, no text recognized')
+
+    except Exception as e:
+        print (e)
+        bot.reply_to(message, e)
+        return
+
 
 
 @bot.message_handler(content_types=['audio', 'voice'])
