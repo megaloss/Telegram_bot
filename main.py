@@ -118,10 +118,11 @@ def greet(message):
 
 def retrieve_subs(message):
     bot.reply_to(message, 'Got video to transcribe. Working... ')
+    url=message.text.split("&")[0]
     try:
         if (os.path.exists("delete_me.opus")):
             os.remove("delete_me.opus")
-        command = '''yt-dlp -f "bestaudio" --extract-audio ''' + message.text + ''' -o "delete_me.opus" '''
+        command = '''yt-dlp -f "bestaudio" --extract-audio ''' + url + ''' -o "delete_me.opus" '''
         s=os.system(command)
         print (s)
         if (os.path.exists("delete_me.opus")):
